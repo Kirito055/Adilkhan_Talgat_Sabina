@@ -1,11 +1,10 @@
 package main
 
 import (
+	"adil/api"
 	"fmt"
 	"net/http"
 	"os"
-
-	"github.com/PacktPublishing/Cloud-Native-Go/api"
 )
 
 func main() {
@@ -15,7 +14,7 @@ func main() {
 
 	http.HandleFunc("/api/books", api.BooksHandleFunc)
 	http.HandleFunc("/api/books/", api.BookHandleFunc)
-
+	http.HandleFunc("/api/login", api.UserHandleFunc)
 	http.ListenAndServe(port(), nil)
 }
 
@@ -29,5 +28,5 @@ func port() string {
 
 func index(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Welcome to Cloud Native Go (Update).")
+	fmt.Fprintf(w, "Welcome Agaiyn")
 }

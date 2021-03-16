@@ -1,9 +1,13 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"os"
 )
 
 // Book type with Name, Author and ISBN
@@ -28,8 +32,40 @@ func (b Book) ToJSON() []byte {
 	return ToJSON
 }
 
+type application struct {
+	errorLog *log.Logger
+	infoLog  *log.Logger
+	books    *BookModel
+}
+
+func FromDB() []*Book {
+	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
+	errorLog := log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
+
+	pool, err := pgxpool.Connect(context.Background(), "user=postgres password=123 host=localhost port=5432 dbname=books sslmode=disable pool_max_conns=10")
+	if err != nil {
+		log.Fatalf("Unable to connection to database: %v\n", err)
+	}
+	app := &application{
+		errorLog: errorLog,
+		infoLog:  infoLog,
+		books:    &BookModel{DB: pool},
+	}
+
+	defer pool.Close()
+
+	s, err := app.books.GetALL()
+	if err != nil {
+		panic(err)
+
+	}
+
+	return s
+}
+
 // FromJSON to be used for unmarshalling of Book type
 func FromJSON(data []byte) Book {
+
 	book := Book{}
 	err := json.Unmarshal(data, &book)
 	if err != nil {
@@ -39,21 +75,27 @@ func FromJSON(data []byte) Book {
 }
 
 // AllBooks returns a slice of all books
-func AllBooks() []Book {
-	values := make([]Book, len(books))
-	idx := 0
-	for _, book := range books {
-		values[idx] = book
-		idx++
-	}
-	return values
+func AllBooks() []*Book {
+	s := FromDB()
+	return s
 }
+
+// AllBooks returns a slice of all books
+//func AllBooks() []Book {
+//	values := make([]Book, len(books))
+//	idx := 0
+//	for _, book := range books {
+//		values[idx] = book
+//		idx++
+//	}
+//	return values
+//}
 
 // BooksHandleFunc to be used as http.HandleFunc for Book API
 func BooksHandleFunc(w http.ResponseWriter, r *http.Request) {
 	switch method := r.Method; method {
 	case http.MethodGet:
-		books := AllBooks()
+		books := FromDB()
 		writeJSON(w, books)
 	case http.MethodPost:
 		body, err := ioutil.ReadAll(r.Body)
@@ -117,28 +159,85 @@ func writeJSON(w http.ResponseWriter, i interface{}) {
 }
 
 // GetBook returns the book for a given ISBN
-func GetBook(isbn string) (Book, bool) {
-	book, found := books[isbn]
-	return book, found
+func GetBook(isbn string) (*Book, bool) {
+	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
+	errorLog := log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
+
+	pool, err := pgxpool.Connect(context.Background(), "user=postgres password=123 host=localhost port=5432 dbname=books sslmode=disable pool_max_conns=10")
+	if err != nil {
+		log.Fatalf("Unable to connection to database: %v\n", err)
+	}
+	app := &application{
+		errorLog: errorLog,
+		infoLog:  infoLog,
+		books:    &BookModel{DB: pool},
+	}
+
+	defer pool.Close()
+
+	s, err := app.books.GetByIsbn(isbn)
+	if err != nil {
+		panic(err)
+
+	}
+
+	return s, false
 }
 
 // CreateBook creates a new Book if it does not exist
 func CreateBook(book Book) (string, bool) {
-	_, exists := books[book.ISBN]
-	if exists {
-		return "", false
+	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
+	errorLog := log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
+
+	pool, err := pgxpool.Connect(context.Background(), "user=postgres password=123 host=localhost port=5432 dbname=books sslmode=disable pool_max_conns=10")
+	if err != nil {
+		log.Fatalf("Unable to connection to database: %v\n", err)
 	}
-	books[book.ISBN] = book
-	return book.ISBN, true
+	app := &application{
+		errorLog: errorLog,
+		infoLog:  infoLog,
+		books:    &BookModel{DB: pool},
+	}
+
+	defer pool.Close()
+
+	s, err := app.books.Insert(book.Title, book.Author, book.Description, book.ISBN)
+	if s != "" {
+		return s, true
+	}
+	if err != nil {
+		panic(err)
+		return "", false
+
+	}
+
+	return s, false
 }
 
 // UpdateBook updates an existing book
 func UpdateBook(isbn string, book Book) bool {
-	_, exists := books[isbn]
-	if exists {
-		books[isbn] = book
+	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
+	errorLog := log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
+
+	pool, err := pgxpool.Connect(context.Background(), "user=postgres password=123 host=localhost port=5432 dbname=books sslmode=disable pool_max_conns=10")
+	if err != nil {
+		log.Fatalf("Unable to connection to database: %v\n", err)
 	}
-	return exists
+	app := &application{
+		errorLog: errorLog,
+		infoLog:  infoLog,
+		books:    &BookModel{DB: pool},
+	}
+
+	defer pool.Close()
+
+	s, err := app.books.Update(book.Title, book.Author, book.Description, isbn)
+	if err != nil {
+		panic(err)
+
+	}
+
+	return s
 }
 
 // DeleteBook removes a book from the map by ISBN key
